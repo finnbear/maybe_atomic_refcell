@@ -105,6 +105,40 @@ pub struct MaybeAtomicRef<'b, T: ?Sized> {
     inner: &'b T,
 }
 
+impl<'b, T: ?Sized> MaybeAtomicRef<'b, T> {
+    /// Make a new `MaybeAtomicRef` for a component of the borrowed data.
+    #[inline]
+    pub fn map<U: ?Sized, F>(orig: MaybeAtomicRef<'b, T>, f: F) -> MaybeAtomicRef<'b, U>
+    where
+        F: FnOnce(&T) -> &U,
+    {
+        #[cfg(any(debug_assertions, feature = "safe"))]
+        return MaybeAtomicRef {
+            inner: atomic_refcell::AtomicRef::map(orig.inner, f),
+        };
+        #[cfg(not(any(debug_assertions, feature = "safe")))]
+        MaybeAtomicRef {
+            inner: f(orig.inner),
+        }
+    }
+
+    /// Make a new `MaybeAtomicRef` for an optional component of the borrowed data.
+    #[inline]
+    pub fn filter_map<U: ?Sized, F>(
+        orig: MaybeAtomicRef<'b, T>,
+        f: F,
+    ) -> Option<MaybeAtomicRef<'b, U>>
+    where
+        F: FnOnce(&T) -> Option<&U>,
+    {
+        #[cfg(any(debug_assertions, feature = "safe"))]
+        return atomic_refcell::AtomicRef::filter_map(orig.inner, f)
+            .map(|inner| MaybeAtomicRef { inner });
+        #[cfg(not(any(debug_assertions, feature = "safe")))]
+        f(orig.inner).map(|inner| MaybeAtomicRef { inner })
+    }
+}
+
 impl<'b, T: ?Sized> Deref for MaybeAtomicRef<'b, T> {
     type Target = T;
 
@@ -121,6 +155,40 @@ pub struct MaybeAtomicRefMut<'b, T: ?Sized> {
     inner: atomic_refcell::AtomicRefMut<'b, T>,
     #[cfg(not(any(debug_assertions, feature = "safe")))]
     inner: &'b mut T,
+}
+
+impl<'b, T: ?Sized> MaybeAtomicRefMut<'b, T> {
+    /// Make a new `MaybeAtomicRef` for a component of the borrowed data.
+    #[inline]
+    pub fn map<U: ?Sized, F>(orig: MaybeAtomicRefMut<'b, T>, f: F) -> MaybeAtomicRefMut<'b, U>
+    where
+        F: FnOnce(&mut T) -> &mut U,
+    {
+        #[cfg(any(debug_assertions, feature = "safe"))]
+        return MaybeAtomicRefMut {
+            inner: atomic_refcell::AtomicRefMut::map(orig.inner, f),
+        };
+        #[cfg(not(any(debug_assertions, feature = "safe")))]
+        MaybeAtomicRefMut {
+            inner: f(orig.inner),
+        }
+    }
+
+    /// Make a new `MaybeAtomicRef` for an optional component of the borrowed data.
+    #[inline]
+    pub fn filter_map<U: ?Sized, F>(
+        orig: MaybeAtomicRefMut<'b, T>,
+        f: F,
+    ) -> Option<MaybeAtomicRefMut<'b, U>>
+    where
+        F: FnOnce(&mut T) -> Option<&mut U>,
+    {
+        #[cfg(any(debug_assertions, feature = "safe"))]
+        return atomic_refcell::AtomicRefMut::filter_map(orig.inner, f)
+            .map(|inner| MaybeAtomicRefMut { inner });
+        #[cfg(not(any(debug_assertions, feature = "safe")))]
+        f(orig.inner).map(|inner| MaybeAtomicRefMut { inner })
+    }
 }
 
 impl<'b, T: ?Sized> Deref for MaybeAtomicRefMut<'b, T> {
