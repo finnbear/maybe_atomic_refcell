@@ -12,7 +12,10 @@ emulate the same interface in `release` mode, minus the runtime overhead.
 ## Limitations
 
 - No try-borrows, as they are impossible to (properly) implement without overhead
+- `borrow` and `borrow_mut` are `unsafe` (despite being safe in `debug` mode)
+- No `PartialEq`, `Eq`, `PartialOrd`, `Ord`, etc. due to the above
 - No `map` or `filter_map` for now (will be added in the future)
+
 ## License
 
 Licensed under either of

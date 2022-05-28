@@ -1,6 +1,6 @@
+use std::fmt;
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
-use std::{cmp, fmt};
 
 /// Like an `AtomicRefCell` but no overhead of runtime checks in release mode.
 pub struct MaybeAtomicRefCell<T: ?Sized> {
@@ -31,28 +31,30 @@ impl<T> MaybeAtomicRefCell<T> {
 
 impl<T: ?Sized> MaybeAtomicRefCell<T> {
     /// Immutably borrows the wrapped value. Performs runtime checks in debug mode, but not in
-    /// release mode.
+    /// release mode (hence `unsafe`).
     #[inline]
-    pub fn borrow(&self) -> MaybeAtomicRef<T> {
+    pub unsafe fn borrow(&self) -> MaybeAtomicRef<T> {
         #[cfg(debug_assertions)]
         return MaybeAtomicRef {
             inner: self.inner.borrow(),
         };
         #[cfg(not(debug_assertions))]
+        #[allow(unused_unsafe)]
         MaybeAtomicRef {
             inner: unsafe { &*self.inner.get() },
         }
     }
 
     /// Mutably borrows the wrapped value. Performs runtime checks in debug mode, but not in
-    /// release mode.
+    /// release mode (hence `unsafe`).
     #[inline]
-    pub fn borrow_mut(&self) -> MaybeAtomicRefMut<T> {
+    pub unsafe fn borrow_mut(&self) -> MaybeAtomicRefMut<T> {
         #[cfg(debug_assertions)]
         return MaybeAtomicRefMut {
             inner: self.inner.borrow_mut(),
         };
         #[cfg(not(debug_assertions))]
+        #[allow(unused_unsafe)]
         MaybeAtomicRefMut {
             inner: unsafe { &mut *self.inner.get() },
         }
@@ -83,40 +85,10 @@ impl<T: ?Sized> MaybeAtomicRefCell<T> {
 unsafe impl<T: ?Sized + Send> Send for MaybeAtomicRefCell<T> {}
 unsafe impl<T: ?Sized + Send + Sync> Sync for MaybeAtomicRefCell<T> {}
 
-impl<T: Clone> Clone for MaybeAtomicRefCell<T> {
-    #[inline]
-    fn clone(&self) -> MaybeAtomicRefCell<T> {
-        MaybeAtomicRefCell::new(self.borrow().clone())
-    }
-}
-
 impl<T: Default> Default for MaybeAtomicRefCell<T> {
     #[inline]
     fn default() -> MaybeAtomicRefCell<T> {
         MaybeAtomicRefCell::new(Default::default())
-    }
-}
-
-impl<T: ?Sized + PartialEq> PartialEq for MaybeAtomicRefCell<T> {
-    #[inline]
-    fn eq(&self, other: &MaybeAtomicRefCell<T>) -> bool {
-        *self.borrow() == *other.borrow()
-    }
-}
-
-impl<T: ?Sized + Eq> Eq for MaybeAtomicRefCell<T> {}
-
-impl<T: ?Sized + PartialOrd> PartialOrd for MaybeAtomicRefCell<T> {
-    #[inline]
-    fn partial_cmp(&self, other: &MaybeAtomicRefCell<T>) -> Option<cmp::Ordering> {
-        self.borrow().partial_cmp(&*other.borrow())
-    }
-}
-
-impl<T: ?Sized + Ord> Ord for MaybeAtomicRefCell<T> {
-    #[inline]
-    fn cmp(&self, other: &MaybeAtomicRefCell<T>) -> cmp::Ordering {
-        self.borrow().cmp(&*other.borrow())
     }
 }
 
@@ -197,53 +169,61 @@ mod tests {
     fn it_works() {
         let cell = MaybeAtomicRefCell::new(5);
 
-        {
-            assert_eq!(*cell.borrow(), 5);
-            let _borrow1 = cell.borrow();
-            let _borrow2 = cell.borrow();
+        unsafe {
+            {
+                assert_eq!(*cell.borrow(), 5);
+                let _borrow1 = cell.borrow();
+                let _borrow2 = cell.borrow();
+            }
+
+            *cell.borrow_mut() += 1;
+
+            {
+                let _borrow1 = cell.borrow();
+                let _borrow2 = cell.borrow();
+                assert_eq!(*cell.borrow(), 6);
+            }
+
+            // Is Send.
+            std::thread::spawn(move || {
+                let mine = cell;
+                mine.borrow();
+
+                let inner = mine.into_inner();
+                assert_eq!(inner, 6);
+            })
+            .join()
+            .unwrap();
         }
-
-        *cell.borrow_mut() += 1;
-
-        {
-            let _borrow1 = cell.borrow();
-            let _borrow2 = cell.borrow();
-            assert_eq!(*cell.borrow(), 6);
-        }
-
-        // Is Send.
-        std::thread::spawn(move || {
-            let mine = cell;
-            mine.borrow();
-
-            let inner = mine.into_inner();
-            assert_eq!(inner, 6);
-        })
-        .join()
-        .unwrap();
     }
 
     #[test]
     #[cfg_attr(debug_assertions, should_panic)]
     fn it_panics_mut_mut() {
         let cell = MaybeAtomicRefCell::new(5);
-        let _borrow1 = cell.borrow_mut();
-        let _borrow2 = cell.borrow_mut();
+        unsafe {
+            let _borrow1 = cell.borrow_mut();
+            let _borrow2 = cell.borrow_mut();
+        }
     }
 
     #[test]
     #[cfg_attr(debug_assertions, should_panic)]
     fn it_panics_mut_ref() {
         let cell = MaybeAtomicRefCell::new(5);
-        let _borrow1 = cell.borrow_mut();
-        let _borrow2 = cell.borrow();
+        unsafe {
+            let _borrow1 = cell.borrow_mut();
+            let _borrow2 = cell.borrow();
+        }
     }
 
     #[test]
     #[cfg_attr(debug_assertions, should_panic)]
     fn it_panics_ref_mut() {
         let cell = MaybeAtomicRefCell::new(5);
-        let _borrow1 = cell.borrow();
-        let _borrow2 = cell.borrow_mut();
+        unsafe {
+            let _borrow1 = cell.borrow();
+            let _borrow2 = cell.borrow_mut();
+        }
     }
 }
