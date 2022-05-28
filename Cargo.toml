@@ -1,0 +1,11 @@
+[package]
+name = "maybe_atomic_refcell"
+authors = ["Finn Bear"]
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+edition = "2021"
+repository = "https://github.com/finnbear/maybe_atomic_refcell/"
+description = "`AtomicRefcell` for `debug` mode and `UnsafeCell` in `release` mode"
+
+[dependencies]
+atomic_refcell = "0.1"
