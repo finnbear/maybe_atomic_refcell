@@ -9,6 +9,10 @@ this is an excellent way to validate code and ensure safety, it is an expensive
 operation. This crate delegates to `AtomicRefCell` in `debug` mode and uses `UnsafeCell` to
 emulate the same interface in `release` mode, minus the runtime overhead.
 
+## Features
+
+- `safe` enables unconditional runtime checks, good for validating in `release` mode
+
 ## Limitations
 
 - No try-borrows, as they are impossible to (properly) implement without overhead

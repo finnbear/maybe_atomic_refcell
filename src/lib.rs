@@ -4,9 +4,9 @@ use std::ops::{Deref, DerefMut};
 
 /// Like an `AtomicRefCell` but no overhead of runtime checks in release mode.
 pub struct MaybeAtomicRefCell<T: ?Sized> {
-    #[cfg(debug_assertions)]
+    #[cfg(any(debug_assertions, feature = "safe"))]
     inner: atomic_refcell::AtomicRefCell<T>,
-    #[cfg(not(debug_assertions))]
+    #[cfg(not(any(debug_assertions, feature = "safe")))]
     inner: std::cell::UnsafeCell<T>,
 }
 
@@ -15,9 +15,9 @@ impl<T> MaybeAtomicRefCell<T> {
     #[inline]
     pub const fn new(value: T) -> MaybeAtomicRefCell<T> {
         MaybeAtomicRefCell {
-            #[cfg(debug_assertions)]
+            #[cfg(any(debug_assertions, feature = "safe"))]
             inner: atomic_refcell::AtomicRefCell::new(value),
-            #[cfg(not(debug_assertions))]
+            #[cfg(not(any(debug_assertions, feature = "safe")))]
             inner: std::cell::UnsafeCell::new(value),
         }
     }
@@ -34,11 +34,11 @@ impl<T: ?Sized> MaybeAtomicRefCell<T> {
     /// release mode (hence `unsafe`).
     #[inline]
     pub unsafe fn borrow(&self) -> MaybeAtomicRef<T> {
-        #[cfg(debug_assertions)]
+        #[cfg(any(debug_assertions, feature = "safe"))]
         return MaybeAtomicRef {
             inner: self.inner.borrow(),
         };
-        #[cfg(not(debug_assertions))]
+        #[cfg(not(any(debug_assertions, feature = "safe")))]
         #[allow(unused_unsafe)]
         MaybeAtomicRef {
             inner: unsafe { &*self.inner.get() },
@@ -49,11 +49,11 @@ impl<T: ?Sized> MaybeAtomicRefCell<T> {
     /// release mode (hence `unsafe`).
     #[inline]
     pub unsafe fn borrow_mut(&self) -> MaybeAtomicRefMut<T> {
-        #[cfg(debug_assertions)]
+        #[cfg(any(debug_assertions, feature = "safe"))]
         return MaybeAtomicRefMut {
             inner: self.inner.borrow_mut(),
         };
-        #[cfg(not(debug_assertions))]
+        #[cfg(not(any(debug_assertions, feature = "safe")))]
         #[allow(unused_unsafe)]
         MaybeAtomicRefMut {
             inner: unsafe { &mut *self.inner.get() },
@@ -66,9 +66,9 @@ impl<T: ?Sized> MaybeAtomicRefCell<T> {
     /// the pointer.
     #[inline]
     pub fn as_ptr(&self) -> *mut T {
-        #[cfg(debug_assertions)]
+        #[cfg(any(debug_assertions, feature = "safe"))]
         return self.inner.as_ptr();
-        #[cfg(not(debug_assertions))]
+        #[cfg(not(any(debug_assertions, feature = "safe")))]
         self.inner.get()
     }
 
@@ -99,9 +99,9 @@ impl<T> From<T> for MaybeAtomicRefCell<T> {
 }
 
 pub struct MaybeAtomicRef<'b, T: ?Sized> {
-    #[cfg(debug_assertions)]
+    #[cfg(any(debug_assertions, feature = "safe"))]
     inner: atomic_refcell::AtomicRef<'b, T>,
-    #[cfg(not(debug_assertions))]
+    #[cfg(not(any(debug_assertions, feature = "safe")))]
     inner: &'b T,
 }
 
@@ -109,17 +109,17 @@ impl<'b, T: ?Sized> Deref for MaybeAtomicRef<'b, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        #[cfg(debug_assertions)]
+        #[cfg(any(debug_assertions, feature = "safe"))]
         return self.inner.deref();
-        #[cfg(not(debug_assertions))]
+        #[cfg(not(any(debug_assertions, feature = "safe")))]
         self.inner
     }
 }
 
 pub struct MaybeAtomicRefMut<'b, T: ?Sized> {
-    #[cfg(debug_assertions)]
+    #[cfg(any(debug_assertions, feature = "safe"))]
     inner: atomic_refcell::AtomicRefMut<'b, T>,
-    #[cfg(not(debug_assertions))]
+    #[cfg(not(any(debug_assertions, feature = "safe")))]
     inner: &'b mut T,
 }
 
@@ -127,18 +127,18 @@ impl<'b, T: ?Sized> Deref for MaybeAtomicRefMut<'b, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        #[cfg(debug_assertions)]
+        #[cfg(any(debug_assertions, feature = "safe"))]
         return self.inner.deref();
-        #[cfg(not(debug_assertions))]
+        #[cfg(not(any(debug_assertions, feature = "safe")))]
         self.inner
     }
 }
 
 impl<'b, T: ?Sized> DerefMut for MaybeAtomicRefMut<'b, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        #[cfg(debug_assertions)]
+        #[cfg(any(debug_assertions, feature = "safe"))]
         return self.inner.deref_mut();
-        #[cfg(not(debug_assertions))]
+        #[cfg(not(any(debug_assertions, feature = "safe")))]
         self.inner
     }
 }
@@ -198,7 +198,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(debug_assertions, should_panic)]
+    #[cfg_attr(any(debug_assertions, feature = "safe"), should_panic)]
     fn it_panics_mut_mut() {
         let cell = MaybeAtomicRefCell::new(5);
         unsafe {
@@ -208,7 +208,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(debug_assertions, should_panic)]
+    #[cfg_attr(any(debug_assertions, feature = "safe"), should_panic)]
     fn it_panics_mut_ref() {
         let cell = MaybeAtomicRefCell::new(5);
         unsafe {
@@ -218,7 +218,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(debug_assertions, should_panic)]
+    #[cfg_attr(any(debug_assertions, feature = "safe"), should_panic)]
     fn it_panics_ref_mut() {
         let cell = MaybeAtomicRefCell::new(5);
         unsafe {
